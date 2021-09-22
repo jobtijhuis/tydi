@@ -8,7 +8,7 @@ use array_assignment::ArrayAssignment;
 use crate::physical::Width;
 use crate::{Document, Error, Result};
 
-use super::declaration::ObjectDeclaration;
+use super::declaration::{ObjectDeclaration, ObjectKind};
 use super::object::ObjectType;
 
 use self::bitvec::BitVecValue;
@@ -533,9 +533,9 @@ impl FieldSelection {
 /// A VHDL range constraint
 #[derive(Debug, Clone)]
 pub enum RangeConstraint {
-    /// A range [start] to [end]
+    /// A range \[start\] to \[end\]
     To { start: i32, end: i32 },
-    /// A range [start] downto [end]
+    /// A range \[start\] downto \[end\]
     Downto { start: i32, end: i32 },
     /// An index within a range
     Index(i32),

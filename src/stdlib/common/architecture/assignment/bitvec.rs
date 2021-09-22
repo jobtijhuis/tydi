@@ -32,15 +32,15 @@ pub enum BitVecValue {
     Full(Vec<StdLogicValue>),
     /// A value is assigned from an unsigned integer
     ///
-    /// Result: std_logic_vector(to_unsigned([value], [name]'length))
+    /// Result: std_logic_vector(to_unsigned(\[value\], \[name\]'length))
     ///
-    /// Or: std_logic_vector(to_unsigned([value], [range length]))
+    /// Or: std_logic_vector(to_unsigned(\[value\], [range length]))
     Unsigned(u32),
     /// A value is assigned from a signed integer
     ///
-    /// Result: std_logic_vector(to_signed([value], [name]'length))
+    /// Result: std_logic_vector(to_signed(\[value\], \[name\]'length))
     ///
-    /// Or: std_logic_vector(to_signed([value], [range length]))
+    /// Or: std_logic_vector(to_signed(\[value\], [range length]))
     Signed(i32),
 }
 
