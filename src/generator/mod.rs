@@ -31,6 +31,6 @@ macro_rules! cat {
 /// Trait to generate back-end specific source files from the common hardware representation
 /// of a project.
 pub trait GenerateProject {
-    /// Generate source files from a [common::Project] and save them to [path].
+    /// Generate source files from a [common::Project] and save them to \[path\].
     fn generate(&self, project: &Project, path: impl AsRef<Path>) -> Result<()>;
 }

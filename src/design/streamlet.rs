@@ -149,7 +149,7 @@ impl Interface {
         self.mode
     }
 
-    /// Return the [LogicalStreamType] of the interface.
+    /// Return the [LogicalType] of the interface.
     pub fn typ(&self) -> LogicalType {
         self.typ.clone()
     }

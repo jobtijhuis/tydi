@@ -424,11 +424,6 @@ impl From<Union> for LogicalType {
 /// stream types. Two classes of stream types are defined: stream-manipulating
 /// types, and element-manipulating types.
 ///
-/// # Examples
-///
-/// ```rust
-/// ```
-///
 /// [Reference](https://abs-tudelft.github.io/tydi/specification/logical.html#logical-stream-type)
 #[derive(Debug, Clone, PartialEq)]
 pub enum LogicalType {

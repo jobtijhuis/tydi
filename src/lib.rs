@@ -158,10 +158,6 @@ where
 /// - The name does not start with a digit
 /// - The name does not contain double underscores
 ///
-/// # Examples
-///
-/// ```rust
-/// ```
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Name(String);
 
