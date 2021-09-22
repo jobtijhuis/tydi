@@ -3,12 +3,17 @@ use indexmap::IndexMap;
 use crate::{
     cat,
     design::StreamletKey,
-    generator::common::{convert::CANON_SUFFIX, Package},
-    stdlib::common::architecture::{
-        assignment::{flatten::FlatAssignment, Assign, FieldSelection},
-        declaration::{ObjectDeclaration, ObjectMode},
-        statement::PortMapping,
-        Architecture,
+    generator::common::{
+        convert::CANON_SUFFIX,
+        Package,
+    },
+    stdlib::common::{
+        architecture::{
+            assignment::{flatten::FlatAssignment, Assign, FieldSelection},
+            declaration::{ObjectDeclaration, ObjectMode},
+            statement::PortMapping,
+            Architecture,
+        },
     },
     Error, Result,
 };
