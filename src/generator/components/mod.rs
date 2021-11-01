@@ -8,6 +8,7 @@ pub mod records {
     use crate::generator::{common::*};
     use crate::cat;
 
+    #[allow(dead_code)]
     fn prim(bits: u32) -> Type {
         Type::bitvec(bits)
     }
@@ -32,6 +33,7 @@ pub mod records {
         )
     }
 
+    #[allow(dead_code)]
     fn rec_of_single(name: impl Into<String>) -> Type {
         Type::record(
             name.into(),
@@ -50,6 +52,7 @@ pub mod records {
         )
     }
 
+    #[allow(dead_code)]
     fn rec_nested(name: impl Into<String>) -> Type {
         let n: String = name.into();
         Type::record(
@@ -61,6 +64,7 @@ pub mod records {
         )
     }
 
+    #[allow(dead_code)]
     fn union(name: impl Into<String>) -> Type {
         Type::union(
             name,
@@ -72,6 +76,7 @@ pub mod records {
         )
     }
 
+    #[allow(dead_code)]
     fn union_nested(name: impl Into<String>) -> Type {
         let n: String = name.into();
         Type::union(
@@ -87,12 +92,48 @@ pub mod records {
 
 #[cfg(test)]
 mod test {
+    use std::convert::TryFrom;
     
-    use crate::generator::{common::*, vhdl::Declare};
+    use crate::generator::{
+        common::convert::Packify,
+        common::convert::Componentify,
+        common::convert::CANON_SUFFIX,
+        common::*,
+        vhdl::Declare,
+    };
     use crate::generator::components::records;
     use crate::logical::LogicalType;
+    use crate::stdlib::common::architecture::*;
+    use crate::design::{
+        project::Project,
+        library::Library,
+        StreamletKey,
+    };
+    use crate::{
+        Name, cat, Result, parser, Error
+    };
 
-    
+    use crate::stdlib::common::{
+        architecture::{
+            statement::PortMapping,
+            assignment::Assign,
+            declaration::ObjectDeclaration
+        },
+    };
+
+    fn logical_slice<'a>(l_type : LogicalType, package: &'a Package) -> Result<Architecture<'a>> {
+
+        let streamlet_key = StreamletKey::try_from("simple_stream")?;
+
+        let architecture = Architecture::new_default(
+            &package,
+            cat!(streamlet_key, CANON_SUFFIX.unwrap()) 
+        )?;
+        let portmap =
+        PortMapping::from_component(&package.get_component(streamlet_key.clone())?, "canonical")?;
+
+        Ok(architecture)
+    }
 
     pub fn test_comp() -> Component {
         Component::new (
@@ -126,25 +167,97 @@ end component;"
         );
     }
 
-    fn logical_slice(l_type : LogicalType) -> Component {
-        let comp = Component::new (
-            "test_comp",
+    #[test]
+    fn test_logical_slice() -> Result<()>{
+        let my_type = LogicalType::try_new_bits(8).unwrap();
+
+        let (_, streamlet) = parser::nom::streamlet(
+            "Streamlet streamlet (a : in Bits<1>, b : out Bits<1>)",
+        ).unwrap();
+
+        let (_, complex_streamlet) = parser::nom::streamlet(
+            "Streamlet complex_streamlet (a : in Stream<Bits<1>>, b : out Stream<Bits<1>>)",
+        ).unwrap();
+
+        let library = Library::try_new(
+            Name::try_from("test_library")?,
             vec![],
+            vec![streamlet, complex_streamlet]
+        )?;
+
+        let streamlet_key = StreamletKey::try_from("complex_streamlet")?;
+
+        let package = library.canonical();
+
+        let mut architecture = Architecture::new_default(
+            &package,
+            cat!(streamlet_key, CANON_SUFFIX.unwrap())
+        )?;
+        // let mut portmap =
+        // PortMapping::from_component(
+        //     &package.get_component(cat!(streamlet_key, CANON_SUFFIX.unwrap()))?, 
+        //     "canonical"
+        // )?;
+
+        let streamslice_comp = Component::new(
+            "StreamSlice",
             vec![
-                Port::new_documented("a", Mode::In, records::rec_rev("a"), None),
-                Port::new_documented("b", Mode::Out, records::rec_rev_nested("b"), None),
+                // TODO: Implement natural
+                Parameter{name: String::from("DATA_WIDTH"), typ: Type::Bit}
             ],
-            None
+            vec![
+                Port::new_documented("clk", Mode::In, Type::Bit, None),
+                Port::new_documented("reset", Mode::In, Type::Bit, None),
+                Port::new_documented("in_valid", Mode::In, Type::Bit, None),
+                Port::new_documented("in_ready", Mode::In, Type::Bit, None),
+                Port::new_documented("in_data", Mode::In, Type::Bit, None),
+                Port::new_documented("out_valid", Mode::Out, Type::Bit, None),
+                Port::new_documented("out_ready", Mode::Out, Type::Bit, None),
+                Port::new_documented("out_data", Mode::Out, Type::Bit, None)
+            ],
+            Some(String::from("test"))
         );
 
-        return comp;        
+        let mut slice_portmap =
+        PortMapping::from_component(
+            &streamslice_comp,
+            "streamslice"
+        )?;
+
+        // create signals and assignments for StreamSlice component
+        for (port_name, object) in slice_portmap.clone().ports() {
+            let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
+            let _assign_decl = signal.assign(object)?;
+            slice_portmap.map_port(port_name, &signal)?;
+            architecture.add_declaration(signal)?;
+        }
+
+        architecture.add_statement(slice_portmap)?;
+
+        // // create signals and assignments for component from entity
+        // for (port_name, object) in portmap.clone().ports() {
+        //     let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
+        //     let _assign_decl = signal.assign(architecture.entity_ports()?.get(port_name).ok_or(
+        //         Error::BackEndError(format!("Entity does not have a {} signal", port_name)),
+        //     )?)?;
+        //     portmap.map_port(port_name, &signal)?;
+        //     architecture.add_declaration(signal)?;
+        // }
+
+        // architecture.add_statement(portmap)?;
+
+        println!("{}", architecture.declare()?);
+
+        Ok(())
+
     }
 
-    #[test]
-    fn test_logical_slice() {
-        let my_type = LogicalType::try_new_bits(8).unwrap();
-        let _result = logical_slice(my_type);
+    // Things to add for using external component:
+    // use work.Stream_pkg.all;
+    // PortMapping of Component
+    // add generics to Portmapping
+    // use ObjectDeclaration::constant for defining generics
+    // Find a way to do sub assign of bitvector
 
-    }
 
 }

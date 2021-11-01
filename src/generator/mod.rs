@@ -6,6 +6,7 @@ use crate::Result;
 pub mod chisel;
 pub mod common;
 pub mod vhdl;
+pub mod components;
 
 /// Concatenate stuff using format with an underscore in between.
 /// Useful if the separator ever changes.
