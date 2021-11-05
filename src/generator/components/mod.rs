@@ -1,116 +1,122 @@
 
 
 mod components {
+    use std::convert::TryFrom;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use crate::{
+        Name, cat, Result, Error, Identify
+    };
+    use crate::logical::{
+        LogicalType, Direction
+    };
+    use crate::design::{
+        StreamletKey,
+    };
+    use crate::generator::{
+        common::*,
+        common::convert::CANON_SUFFIX,
+        vhdl::Declare,
+    };
+    use crate::stdlib::common::architecture::*;
 
+    pub fn alphabet_sequence(num: u32) -> String {
+        let parent = num / 26;
+        if parent > 0 {
+            return alphabet_sequence(parent - 1) + &alphabet_sequence(num % 26);
+        } else {
+            let alph_num = 97 + num % 26;
+            return char::from_u32(alph_num).unwrap().to_string();
+        }
+    }
+
+    pub fn logical_slice<'a>(logical_type : LogicalType, package: &'a mut Package) -> Result<Architecture<'a>> {
+
+        fn gen_ports (l_type: &LogicalType, gen_clk_rst: bool) -> Vec<Port> {
+            let mut all_ports = if gen_clk_rst {
+                vec![
+                    Port::new_documented("clk", Mode::In, Type::Bit, None),
+                    Port::new_documented("rst", Mode::In, Type::Bit, None),
+                ]
+            } else { vec![] };
+            static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+            match &l_type {
+                LogicalType::Null => todo!(), // implement later
+                LogicalType::Bits(width) => {
+                    let data_in_count = COUNTER.fetch_add(1, Ordering::Relaxed);
+                    all_ports.push(Port::new_documented(cat!["in_data", alphabet_sequence(data_in_count)], Mode::In, Type::bitvec(width.get()), None));
+                    all_ports
+                }
+                LogicalType::Group(_) => todo!(), // needs implementation
+                LogicalType::Union(_) => todo!(), // needs implementation
+                // Nested streams currently not supported
+                LogicalType::Stream(stream) => {
+                    if stream.dimensionality() > 1 { todo!() }
+                    if stream.direction() == Direction::Reverse { todo!() }
+                    all_ports.push(Port::new_documented("in_valid", Mode::In, Type::Bit, None));
+                    all_ports.push(Port::new_documented("in_ready", Mode::Out, Type::Bit, None));
+                    all_ports.extend(gen_ports(stream.data(), false));
+
+                    all_ports.push(Port::new_documented("out_valid", Mode::Out, Type::Bit, None));
+                    all_ports.push(Port::new_documented("out_ready", Mode::In, Type::Bit, None));
+                    // TODO: Add all output ports that have been sliced
+                    all_ports
+                }
+            }
+        }
+
+        let entity_ports = gen_ports(&logical_type, true);
+
+        static SLICE_COUNTER: AtomicU32 = AtomicU32::new(0);
+        let slice_count = SLICE_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+        let entity_name = cat!["slice", alphabet_sequence(slice_count)];
+        let slice_entity = Component::new(
+            entity_name.clone(),
+            vec![],
+            entity_ports,
+            None
+        );
+
+        package.components.push(slice_entity);
+
+        // let portmap = PortMapping::from_component(&package.get_component(streamlet_key.clone())?, "canonical")?;
+
+        let architecture = Architecture::new_default(
+            package,
+            entity_name
+        )?;
+
+        Ok(architecture)
+    }
 }
 
-pub mod records {
-    use crate::generator::{common::*};
-    use crate::cat;
-
-    #[allow(dead_code)]
-    fn prim(bits: u32) -> Type {
-        Type::bitvec(bits)
-    }
-
-    fn rec(name: impl Into<String>) -> Type {
-        Type::record(
-            name.into(),
-            vec![
-                Field::new("c", Type::bitvec(42), false, None),
-                Field::new("d", Type::bitvec(1337), false, None),
-            ],
-        )
-    }
-
-    pub fn rec_rev(name: impl Into<String>) -> Type {
-        Type::record(
-            name.into(),
-            vec![
-                Field::new("c", Type::bitvec(42), false, None),
-                Field::new("d", Type::bitvec(1337), true, None),
-            ],
-        )
-    }
-
-    #[allow(dead_code)]
-    fn rec_of_single(name: impl Into<String>) -> Type {
-        Type::record(
-            name.into(),
-            vec![Field::new("a", Type::bitvec(42), false, None)],
-        )
-    }
-
-    pub fn rec_rev_nested(name: impl Into<String>) -> Type {
-        let n: String = name.into();
-        Type::record(
-            n.clone(),
-            vec![
-                Field::new("a", rec(cat!(n, "a")), false, None),
-                Field::new("b", rec_rev(cat!(n, "b")), false, None),
-            ],
-        )
-    }
-
-    #[allow(dead_code)]
-    fn rec_nested(name: impl Into<String>) -> Type {
-        let n: String = name.into();
-        Type::record(
-            n.clone(),
-            vec![
-                Field::new("a", rec(cat!(n, "a")), false, None),
-                Field::new("b", rec(cat!(n, "b")), false, None),
-            ],
-        )
-    }
-
-    #[allow(dead_code)]
-    fn union(name: impl Into<String>) -> Type {
-        Type::union(
-            name,
-            vec![
-                Field::new("tag", Type::bitvec(2), false, None),
-                Field::new("c", Type::bitvec(42), false, None),
-                Field::new("d", Type::bitvec(1337), false, None),
-            ],
-        )
-    }
-
-    #[allow(dead_code)]
-    fn union_nested(name: impl Into<String>) -> Type {
-        let n: String = name.into();
-        Type::union(
-            n.clone(),
-            vec![
-                Field::new("tag", Type::bitvec(2), false, None),
-                Field::new("a", union(cat!(n, "a")), false, None),
-                Field::new("b", union(cat!(n, "b")), false, None),
-            ],
-        )
-    }
-}
 
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;
+    use std::sync::atomic::{AtomicU32, Ordering};
     
     use crate::generator::{
         common::convert::Packify,
-        common::convert::Componentify,
+        common::convert::Portify,
         common::convert::CANON_SUFFIX,
         common::*,
         vhdl::Declare,
     };
-    use crate::generator::components::records;
-    use crate::logical::LogicalType;
+    use crate::logical::{
+        LogicalType, Direction
+    };
     use crate::stdlib::common::architecture::*;
     use crate::design::{
         project::Project,
         library::Library,
         StreamletKey,
+        ComponentKey, IFKey, Interface, Streamlet,
+        implementation::composer::GenericComponent
     };
     use crate::{
-        Name, cat, Result, parser, Error
+        Name, cat, Result, parser, Error, Identify
     };
 
     use crate::stdlib::common::{
@@ -121,54 +127,90 @@ mod test {
         },
     };
 
-    fn logical_slice<'a>(l_type : LogicalType, package: &'a Package) -> Result<Architecture<'a>> {
+    use super::*;
 
-        let streamlet_key = StreamletKey::try_from("simple_stream")?;
+    #[test]
+    fn slice_simple_generation() -> Result<()> {
+        // let (_, streamlet) = parser::nom::streamlet(
+        //     "Streamlet streamlet (b : out Stream<Bits<8>>)",
+        // ).unwrap();
+        let (_, streamlet) = parser::nom::streamlet(
+            "Streamlet streamlet (a : out Stream<Bits<8>>, b : out Stream<Bits<8>>)",
+        ).unwrap();
+
+        let interface = streamlet.interfaces().next().unwrap().clone();
+        let int_ports = interface.canonical(interface.identifier());
+        let logical_type = interface.typ();
+
+        let library = Library::try_new(
+            Name::try_from("test_library")?,
+            vec![],
+            vec![streamlet]
+        )?;
+
+        let mut package = library.canonical();
+
+        let architecture = components::logical_slice(logical_type, &mut package)?;
+
+        println!("architecture: \n {}", architecture.declare()?);
+
+        // Convert Signal to Type from MatthijsR
+
+        let example_output = "
+    library ieee;
+    use ieee.std_logic_1164.all;
+
+    library work;
+    use work.test_library.all;
+
+    entity slice_a is
+    port(
+        clk : in std_logic;
+        rst : in std_logic;
+        in_valid : in std_logic;
+        in_ready : out std_logic;
+        in_data_a : in std_logic_vector(7 downto 0);
+        out_valid : out std_logic;
+        out_ready : in std_logic;
+        out_data_a : out std_logic_vector(7 downto 0);
+    );
+    end slice_a;
+
+    architecture Behavioral of slice_a is
+    begin
+    end Behavioral;
+    ";
+
+        Ok(())
+    }
+
+
+    #[test]
+    fn streamlet_simple_gen() -> Result<()> {
+        let (_, streamlet) = parser::nom::streamlet(
+            "Streamlet streamlet (a : out Stream<Group<op1: Bits<8>, op2: Bits<8>>>)",
+        ).unwrap();
+
+        let library = Library::try_new(
+            Name::try_from("test_library")?,
+            vec![],
+            vec![streamlet]
+        )?;
+
+        let package = library.fancy();
 
         let architecture = Architecture::new_default(
             &package,
-            cat!(streamlet_key, CANON_SUFFIX.unwrap()) 
+            cat!("streamlet", CANON_SUFFIX.unwrap())
         )?;
-        let portmap =
-        PortMapping::from_component(&package.get_component(streamlet_key.clone())?, "canonical")?;
 
-        Ok(architecture)
-    }
+        println!("{}", architecture.declare()?);
 
-    pub fn test_comp() -> Component {
-        Component::new (
-            "test_comp",
-            vec![],
-            vec![
-                Port::new_documented("a", Mode::In, records::rec_rev("a"), None),
-                Port::new_documented("b", Mode::Out, records::rec_rev_nested("b"), None),
-            ],
-            None
-        )
+        Ok(())
     }
 
     #[test]
-    fn comp_decl() {
-        let c = test_comp().with_doc(" My awesome\n Component".to_string());
-        assert_eq!(
-            c.declare().unwrap(),
-            concat!(
-                "-- My awesome
--- Component
-component test_comp
-  port(
-    a_dn : in a_dn_type;
-    a_up : out a_up_type;
-    b_dn : out b_dn_type;
-    b_up : in b_up_type
-  );
-end component;"
-            )
-        );
-    }
-
-    #[test]
-    fn test_logical_slice() -> Result<()>{
+    fn test_slice() -> Result<()>{
         let my_type = LogicalType::try_new_bits(8).unwrap();
 
         let (_, streamlet) = parser::nom::streamlet(
@@ -176,9 +218,8 @@ end component;"
         ).unwrap();
 
         let (_, complex_streamlet) = parser::nom::streamlet(
-            "Streamlet complex_streamlet (a : in Stream<Bits<1>>, b : out Stream<Bits<1>>)",
+            "Streamlet complex_streamlet (a : in Stream<Bits<8>>, b : out Stream<Bits<8>>)",
         ).unwrap();
-
         let library = Library::try_new(
             Name::try_from("test_library")?,
             vec![],
@@ -224,13 +265,19 @@ end component;"
             "streamslice"
         )?;
 
+        //let mut conc_assigns = vec![];
+
         // create signals and assignments for StreamSlice component
         for (port_name, object) in slice_portmap.clone().ports() {
             let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
-            let _assign_decl = signal.assign(object)?;
+            //let _assign_decl = signal.assign(object)?;
             slice_portmap.map_port(port_name, &signal)?;
             architecture.add_declaration(signal)?;
         }
+
+        // for assign in conc_assigns {
+        //     architecture.add_statement(assign)?;
+        // }
 
         architecture.add_statement(slice_portmap)?;
 
@@ -259,5 +306,15 @@ end component;"
     // use ObjectDeclaration::constant for defining generics
     // Find a way to do sub assign of bitvector
 
+    #[test]
+    fn test_alph_seq() {
+        println!("{}", components::alphabet_sequence(701));
+        assert_eq!(components::alphabet_sequence(0),   String::from("a"));
+        assert_eq!(components::alphabet_sequence(25),  String::from("z"));
+        assert_eq!(components::alphabet_sequence(26),  String::from("aa"));
+        assert_eq!(components::alphabet_sequence(30),  String::from("ae"));
+        assert_eq!(components::alphabet_sequence(701), String::from("zz"));
+        assert_eq!(components::alphabet_sequence(702), String::from("aaa"));
+    }
 
 }
