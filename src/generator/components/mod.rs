@@ -14,10 +14,17 @@ mod components {
     };
     use crate::generator::{
         common::*,
+        common::convert::ModeFor,
         common::convert::CANON_SUFFIX,
         vhdl::Declare,
     };
     use crate::stdlib::common::architecture::*;
+    use crate::stdlib::common::architecture::{
+        statement::PortMapping,
+        declaration::ObjectDeclaration,
+        declaration::ObjectMode,
+        assignment::Assign,
+    };
 
     pub fn alphabet_sequence(num: u32) -> String {
         let parent = num / 26;
@@ -28,6 +35,30 @@ mod components {
             return char::from_u32(alph_num).unwrap().to_string();
         }
     }
+
+    pub fn slice_comp(typ: Type) -> Component {
+        Component::new(
+            "StreamSlice",
+            vec![
+                // TODO: Implement natural
+                Parameter{name: String::from("DATA_WIDTH"), typ: Type::Bit}
+            ],
+            vec![
+                Port::new_documented("clk", Mode::In, Type::Bit, None),
+                Port::new_documented("reset", Mode::In, Type::Bit, None),
+                Port::new_documented("in_valid", Mode::In, Type::Bit, None),
+                Port::new_documented("in_ready", Mode::Out, Type::Bit, None),
+                // in_data type and size determined from argument
+                Port::new_documented("in_data", Mode::In, typ.clone(), None),
+                Port::new_documented("out_valid", Mode::Out, Type::Bit, None),
+                Port::new_documented("out_ready", Mode::In, Type::Bit, None),
+                // out_data type and size determined from argument
+                Port::new_documented("out_data", Mode::Out, typ.clone(), None)
+            ],
+            Some(String::from("test"))
+        )
+    }
+
 
     pub fn logical_slice<'a>(logical_type : LogicalType, package: &'a mut Package) -> Result<Architecture<'a>> {
 
@@ -65,7 +96,46 @@ mod components {
             }
         }
 
-        let entity_ports = gen_ports(&logical_type, true);
+        fn gen_ports2 (l_type: &LogicalType, mode: crate::design::Mode) -> Vec<Port> {
+            let mut ports = vec![];
+            let synth_logical = l_type.synthesize();
+            let prefix = match mode {
+                crate::design::Mode::In => "in",
+                crate::design::Mode::Out => "out",
+            };
+
+            for (path, width) in synth_logical.signals() {
+                ports.push(Port::new(
+                    cat![prefix, path.to_string()],
+                    match mode {
+                        crate::design::Mode::In => Mode::In,
+                        crate::design::Mode::Out => Mode::Out,
+                    },
+                    Type::bitvec(width.get()),
+                ));
+            }
+
+            for (path, phys) in synth_logical.streams() {
+                for s in phys.signal_list().into_iter() {
+                    let port_name = cat!(prefix, path, s.identifier());
+                    ports.push(Port::new(
+                        port_name,
+                        s.origin().mode_for(mode),
+                        s.width().into(),
+                    ));
+                }
+            }
+            ports
+        }
+
+        // clk and rst are added manually because they are only added when a streamlet is synthesized
+        // and we operate at two levels below a streamlet but still need clk and rst
+        let mut entity_ports = vec![
+            Port::new_documented("clk", Mode::In, Type::Bit, None),
+            Port::new_documented("rst", Mode::In, Type::Bit, None),
+        ];
+        entity_ports.extend(gen_ports2(&logical_type, crate::design::Mode::In));
+        entity_ports.extend(gen_ports2(&logical_type, crate::design::Mode::Out));
 
         static SLICE_COUNTER: AtomicU32 = AtomicU32::new(0);
         let slice_count = SLICE_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -78,14 +148,56 @@ mod components {
             None
         );
 
+        let data_port_width = slice_entity.ports().iter().find(|x| x.identifier() == "in_data").unwrap().typ();
+
         package.components.push(slice_entity);
 
-        // let portmap = PortMapping::from_component(&package.get_component(streamlet_key.clone())?, "canonical")?;
+        let slice = slice_comp(data_port_width);
 
-        let architecture = Architecture::new_default(
+        let mut slice_portmap = PortMapping::from_component(&slice, "canonical")?;
+
+        let mut architecture = Architecture::new_default(
             package,
             entity_name
         )?;
+
+        let mut slice_signals = vec![];
+        let mut slice_assignments = vec![];
+
+        let ent_ports = architecture.entity_ports().unwrap();
+
+        // create signals and assignments for StreamSlice component
+        for (port_name, object) in slice_portmap.clone().ports() {
+            let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
+            slice_signals.push(signal.clone());
+            //let _assign_decl = signal.assign(object)?;
+
+            let entity_port = ent_ports.get(
+                match port_name.as_str() {
+                    "reset" => "rst",
+                    _ => port_name,
+                }
+            ).ok_or(
+                Error::BackEndError(format!("Entity does not have a {} signal", port_name))
+            )?;
+            slice_assignments.push(
+                if *entity_port.mode() == ObjectMode::Out {
+                    entity_port.assign(&signal)?
+                } else {
+                    signal.assign(entity_port)?
+                }
+            );
+
+            slice_portmap.map_port(port_name, &signal)?;
+            architecture.add_declaration(signal)?;
+        }
+
+        for assign in slice_assignments {
+            architecture.add_statement(assign)?;
+        }
+
+        architecture.add_statement(slice_portmap)?;
+        architecture.add_using(Name::try_new("work")?, "Stream_pkg.all");
 
         Ok(architecture)
     }
@@ -131,15 +243,11 @@ mod test {
 
     #[test]
     fn slice_simple_generation() -> Result<()> {
-        // let (_, streamlet) = parser::nom::streamlet(
-        //     "Streamlet streamlet (b : out Stream<Bits<8>>)",
-        // ).unwrap();
         let (_, streamlet) = parser::nom::streamlet(
-            "Streamlet streamlet (a : out Stream<Bits<8>>, b : out Stream<Bits<8>>)",
+            "Streamlet streamlet (a : out Stream<Bits<8>>)",
         ).unwrap();
 
         let interface = streamlet.interfaces().next().unwrap().clone();
-        let int_ports = interface.canonical(interface.identifier());
         let logical_type = interface.typ();
 
         let library = Library::try_new(
@@ -188,7 +296,10 @@ mod test {
     #[test]
     fn streamlet_simple_gen() -> Result<()> {
         let (_, streamlet) = parser::nom::streamlet(
-            "Streamlet streamlet (a : out Stream<Group<op1: Bits<8>, op2: Bits<8>>>)",
+            "Streamlet streamlet (
+                a : out Stream<Group<op1: Bits<8>, op2: Bits<8>>>,
+                b : in Stream<Group<op1: Bits<4>, op2: Bits<4>>>
+            )",
         ).unwrap();
 
         let library = Library::try_new(
