@@ -62,41 +62,7 @@ mod components {
 
     pub fn logical_slice<'a>(logical_type : LogicalType, package: &'a mut Package) -> Result<Architecture<'a>> {
 
-        fn gen_ports (l_type: &LogicalType, gen_clk_rst: bool) -> Vec<Port> {
-            let mut all_ports = if gen_clk_rst {
-                vec![
-                    Port::new_documented("clk", Mode::In, Type::Bit, None),
-                    Port::new_documented("rst", Mode::In, Type::Bit, None),
-                ]
-            } else { vec![] };
-            static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-            match &l_type {
-                LogicalType::Null => todo!(), // implement later
-                LogicalType::Bits(width) => {
-                    let data_in_count = COUNTER.fetch_add(1, Ordering::Relaxed);
-                    all_ports.push(Port::new_documented(cat!["in_data", alphabet_sequence(data_in_count)], Mode::In, Type::bitvec(width.get()), None));
-                    all_ports
-                }
-                LogicalType::Group(_) => todo!(), // needs implementation
-                LogicalType::Union(_) => todo!(), // needs implementation
-                // Nested streams currently not supported
-                LogicalType::Stream(stream) => {
-                    if stream.dimensionality() > 1 { todo!() }
-                    if stream.direction() == Direction::Reverse { todo!() }
-                    all_ports.push(Port::new_documented("in_valid", Mode::In, Type::Bit, None));
-                    all_ports.push(Port::new_documented("in_ready", Mode::Out, Type::Bit, None));
-                    all_ports.extend(gen_ports(stream.data(), false));
-
-                    all_ports.push(Port::new_documented("out_valid", Mode::Out, Type::Bit, None));
-                    all_ports.push(Port::new_documented("out_ready", Mode::In, Type::Bit, None));
-                    // TODO: Add all output ports that have been sliced
-                    all_ports
-                }
-            }
-        }
-
-        fn gen_ports2 (l_type: &LogicalType, mode: crate::design::Mode) -> Vec<Port> {
+        fn gen_ports (l_type: &LogicalType, mode: crate::design::Mode) -> Vec<Port> {
             let mut ports = vec![];
             let synth_logical = l_type.synthesize();
             let prefix = match mode {
@@ -134,8 +100,8 @@ mod components {
             Port::new_documented("clk", Mode::In, Type::Bit, None),
             Port::new_documented("rst", Mode::In, Type::Bit, None),
         ];
-        entity_ports.extend(gen_ports2(&logical_type, crate::design::Mode::In));
-        entity_ports.extend(gen_ports2(&logical_type, crate::design::Mode::Out));
+        entity_ports.extend(gen_ports(&logical_type, crate::design::Mode::In));
+        entity_ports.extend(gen_ports(&logical_type, crate::design::Mode::Out));
 
         static SLICE_COUNTER: AtomicU32 = AtomicU32::new(0);
         let slice_count = SLICE_COUNTER.fetch_add(1, Ordering::Relaxed);
