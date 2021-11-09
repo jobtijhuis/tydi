@@ -77,7 +77,7 @@ impl<'a> Architecture<'a> {
     }
 
     /// Add additional usings which weren't already part of the package
-    pub fn add_using(&mut self, library: Name, using: String) -> bool {
+    pub fn add_using(&mut self, library: Name, using: impl Into<String>) -> bool {
         self.usings.add_using(library, using)
     }
 
