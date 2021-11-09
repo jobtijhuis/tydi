@@ -1,22 +1,16 @@
 
 
 mod components {
-    use std::convert::TryFrom;
     use std::sync::atomic::{AtomicU32, Ordering};
     use crate::{
         Name, cat, Result, Error, Identify
     };
     use crate::logical::{
-        LogicalType, Direction
-    };
-    use crate::design::{
-        StreamletKey,
+        LogicalType
     };
     use crate::generator::{
         common::*,
         common::convert::ModeFor,
-        common::convert::CANON_SUFFIX,
-        vhdl::Declare,
     };
     use crate::stdlib::common::architecture::*;
     use crate::stdlib::common::architecture::{
@@ -173,34 +167,26 @@ mod components {
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;
-    use std::sync::atomic::{AtomicU32, Ordering};
     
     use crate::generator::{
         common::convert::Packify,
-        common::convert::Portify,
         common::convert::CANON_SUFFIX,
         common::*,
         vhdl::Declare,
     };
-    use crate::logical::{
-        LogicalType, Direction
-    };
     use crate::stdlib::common::architecture::*;
     use crate::design::{
-        project::Project,
         library::Library,
         StreamletKey,
-        ComponentKey, IFKey, Interface, Streamlet,
         implementation::composer::GenericComponent
     };
     use crate::{
-        Name, cat, Result, parser, Error, Identify
+        Name, cat, Result, parser
     };
 
     use crate::stdlib::common::{
         architecture::{
             statement::PortMapping,
-            assignment::Assign,
             declaration::ObjectDeclaration
         },
     };
@@ -230,7 +216,7 @@ mod test {
 
         // Convert Signal to Type from MatthijsR
 
-        let example_output = "
+        let _example_output = "
     library ieee;
     use ieee.std_logic_1164.all;
 
@@ -288,8 +274,6 @@ mod test {
 
     #[test]
     fn test_slice() -> Result<()>{
-        let my_type = LogicalType::try_new_bits(8).unwrap();
-
         let (_, streamlet) = parser::nom::streamlet(
             "Streamlet streamlet (a : in Bits<1>, b : out Bits<1>)",
         ).unwrap();
