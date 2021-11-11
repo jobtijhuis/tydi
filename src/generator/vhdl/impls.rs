@@ -81,6 +81,8 @@ fn declare_arr(arr: &Array) -> Result<String> {
 
     match arr.typ() {
         Type::Bit => return Err(BackEndError("Unexpected, Bit in Array".to_string())),
+        Type::Natural => return Err(BackEndError("Unexpected, Natural in Array".to_string())),
+        Type::Positive => return Err(BackEndError("Unexpected, Positive in Array".to_string())),
         Type::BitVec { width: _ } => this.push_str(arr.typ().declare(false)?.clone().as_str()),
         Type::Record(rec) => rec_declare_children(&mut children, rec.clone(), &mut this)?,
         Type::Union(rec) => rec_declare_children(&mut children, rec.clone(), &mut this)?,
@@ -145,6 +147,8 @@ impl DeclareType for Type {
     fn declare(&self, is_root_type: bool) -> Result<String> {
         match self {
             Type::Bit => Ok("std_logic".to_string()),
+            Type::Natural => Ok("natural".to_string()),
+            Type::Positive => Ok("positive".to_string()),
             Type::BitVec { width } => {
                 let actual_width = if *width == 0 { 1 } else { *width };
                 Ok(format!(
@@ -354,6 +358,8 @@ impl ListUsings for Package {
         fn uses_std_logic(t: &Type) -> bool {
             match t {
                 Type::Bit => true,
+                Type::Natural => false,
+                Type::Positive => false,
                 Type::BitVec { width: _ } => true,
                 Type::Record(rec) => rec.fields().any(|field| uses_std_logic(field.typ())),
                 Type::Union(rec) => rec.fields().any(|field| uses_std_logic(field.typ())),

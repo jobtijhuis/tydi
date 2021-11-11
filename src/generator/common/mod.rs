@@ -237,7 +237,7 @@ impl Array {
         let p: String = with.into();
         let new_name = cat!(self.identifier(), p);
         match self.typ() {
-            Type::Bit | Type::BitVec { width: _ } => {
+            Type::Bit | Type::Natural | Type::Positive | Type::BitVec { width: _ } => {
                 Array::new(new_name, self.typ().clone(), self.width())
             }
             Type::Record(rec) => Array::new(
@@ -275,6 +275,10 @@ pub enum Type {
         /// The width of the vector.
         width: NonNegative,
     },
+    /// Not implemented as hardware type only for generics
+    Natural,
+    /// Not implemented as hardware type only for generics
+    Positive,
     /// A record.
     Record(Record),
     /// Unions are implemented as records when using a "fancy" representation.

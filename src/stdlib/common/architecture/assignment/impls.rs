@@ -17,6 +17,7 @@ impl ListUsings for AssignmentKind {
             AssignmentKind::Direct(direct) => match direct {
                 DirectAssignment::Value(value) => match value {
                     ValueAssignment::Bit(_) => (),
+                    ValueAssignment::Integer(_) => (),
                     ValueAssignment::BitVec(bitvec) => match bitvec {
                         BitVecValue::Others(_) => (),
                         BitVecValue::Full(_) => (),

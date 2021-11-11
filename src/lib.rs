@@ -110,6 +110,8 @@ pub mod stdlib;
 pub type Positive = std::num::NonZeroU32;
 /// Non-negative integer.
 pub type NonNegative = u32;
+/// Natural integer as defined by VHDL.
+pub type Natural = NonNegative;
 /// Positive real.
 pub type PositiveReal = NonZeroReal<f64>;
 

@@ -455,6 +455,8 @@ impl Multilane for Type {
                 Type::Bit => Ok(Type::BitVec {
                     width: element_lanes,
                 }),
+                Type::Natural => unimplemented!("natural currently not supported outside of generics"),
+                Type::Positive => unimplemented!("positive currently not supported outside of generics"),
                 Type::BitVec { width: _ } | Type::Record(_) | Type::Union(_) | Type::Array(_) => {
                     Ok(Type::array(
                         format!("{}_array", identity.into()),

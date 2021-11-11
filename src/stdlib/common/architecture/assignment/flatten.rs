@@ -41,6 +41,8 @@ impl FlatLength for ObjectType {
     fn flat_length(&self) -> Result<u32> {
         Ok(match self {
             ObjectType::Bit => 1,
+            ObjectType::Natural => unimplemented!("Length calculation for Natural not implemented, Natural only supported in generics for now"),
+            ObjectType::Positive => unimplemented!("Length calculation for Positive not implemented, Positive only supported in generics for now"),
             ObjectType::Array(arr) => arr.width() * arr.typ().flat_length()?,
             ObjectType::Record(rec) => {
                 let mut total: u32 = 0;
@@ -174,6 +176,8 @@ impl FlatAssignment for ObjectDeclaration {
             };
             match &self_typ {
                 ObjectType::Bit => finalize()?,
+                ObjectType::Natural => finalize()?,
+                ObjectType::Positive => finalize()?,
                 ObjectType::Array(arr) if arr.is_bitvector() => finalize()?,
                 ObjectType::Array(arr) => {
                     // If the length is 1, make the last range selection an index selection, or introduce an index selection

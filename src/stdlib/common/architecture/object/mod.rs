@@ -13,7 +13,7 @@ use crate::{
     stdlib::common::architecture::assignment::{
         array_assignment::ArrayAssignment, DirectAssignment, ValueAssignment,
     },
-    Error, Identify, Result,
+    Error, Identify, Result
 };
 
 use super::assignment::{Assignment, AssignmentKind, FieldSelection, RangeConstraint};
@@ -25,6 +25,10 @@ pub mod object_from;
 pub enum ObjectType {
     /// A bit object, can not contain further fields
     Bit,
+    /// A natural object which is an integer from 0 to integer'high
+    Natural,
+    /// A positive object which is an integer from 1 to integer'high
+    Positive,
     /// An array of fields, covers both conventional arrays, as well as bit vectors
     Array(ArrayObject),
     /// A record object, consisting of named fields
@@ -35,6 +39,8 @@ impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ObjectType::Bit => write!(f, "Bit"),
+            ObjectType::Natural => write!(f, "Natural"),
+            ObjectType::Positive => write!(f, "Positive"),
             ObjectType::Array(array) => write!(
                 f,
                 "Array ({} to {}) containing {}",
@@ -64,6 +70,12 @@ impl ObjectType {
         match self {
             ObjectType::Bit => Err(Error::InvalidTarget(
                 "Cannot select a field on a Bit".to_string(),
+            )),
+            ObjectType::Natural => Err(Error::InvalidTarget(
+                "Cannot select a field on a Natural".to_string(),
+            )),
+            ObjectType::Positive => Err(Error::InvalidTarget(
+                "Cannot select a field on a Positive".to_string(),
             )),
             ObjectType::Array(array) => match field {
                 FieldSelection::Range(range) => {
@@ -153,6 +165,31 @@ impl ObjectType {
                     )))
                 }
             }
+            ObjectType::Natural => {
+                if let ObjectType::Natural = typ {
+                    Ok(())
+                }
+                // Positive can be assigned to natural but not the other way around
+                else if let ObjectType::Positive = typ {
+                    Ok(())
+                } else {
+                    Err(Error::InvalidTarget(format!(
+                        "Cannot assign {} to Natural",
+                        typ
+                    )))
+                }
+            }
+            ObjectType::Positive => {
+                if let ObjectType::Positive = typ {
+                    Ok(())
+                } else {
+                    // Natural can not be assigned to positive because positive does not include 0
+                    Err(Error::InvalidTarget(format!(
+                        "Cannot assign {} to Positive",
+                        typ
+                    )))
+                }
+            }
             ObjectType::Array(to_array) => {
                 if let ObjectType::Array(from_array) = typ {
                     if from_array.width() == to_array.width() {
@@ -203,10 +240,18 @@ impl ObjectType {
                 DirectAssignment::Value(value) => match value {
                     ValueAssignment::Bit(_) => match to_object {
                         ObjectType::Bit => Ok(()),
-                        ObjectType::Array(_) | ObjectType::Record(_) => Err(Error::InvalidTarget(
+                        ObjectType::Array(_) | ObjectType::Record(_) | ObjectType::Natural | ObjectType::Positive => Err(Error::InvalidTarget(
                             format!("Cannot assign Bit to {}", to_object),
                         )),
                     },
+                    ValueAssignment::Integer(integer) => match to_object {
+                        //TODO: check if integer is in natural and positive range
+                        ObjectType::Natural => Ok(()),
+                        ObjectType::Positive => if *integer == 0 { Err(Error::BackEndError("Cannot assign zero to Positive".to_string())) } else { Ok(()) },
+                        ObjectType::Bit | ObjectType::Array(_) | ObjectType::Record(_) => Err(Error::InvalidTarget(
+                            format!("Cannot assign Integer to {}", to_object),
+                        )),
+                    }
                     ValueAssignment::BitVec(bitvec) => match to_object {
                         ObjectType::Array(array) if array.is_bitvector() => {
                             bitvec.validate_width(array.width())
@@ -305,6 +350,8 @@ impl ObjectType {
     pub fn type_name(&self) -> &str {
         match self {
             ObjectType::Bit => "std_logic",
+            ObjectType::Natural => "natural",
+            ObjectType::Positive => "positive",
             ObjectType::Array(array) => array.type_name(),
             ObjectType::Record(record) => record.type_name(),
         }
@@ -324,7 +371,7 @@ impl ObjectType {
             let (dn, up) = typ.split();
             let dn_obj = if let Some(dn_t) = dn {
                 Some(match dn_t {
-                    Type::Bit | Type::BitVec { width: _ } => unreachable!(),
+                    Type::Bit | Type::Natural | Type::Positive | Type::BitVec { width: _ } => unreachable!(),
                     Type::Record(rec) => Type::Record(rec.append_name_nested("dn")).try_into()?,
                     Type::Union(rec) => Type::Union(rec.append_name_nested("dn")).try_into()?,
                     Type::Array(arr) => Type::Array(arr.append_name_nested("dn")).try_into()?,
@@ -335,7 +382,7 @@ impl ObjectType {
 
             let up_obj = if let Some(up_t) = up {
                 Some(match up_t {
-                    Type::Bit | Type::BitVec { width: _ } => unreachable!(),
+                    Type::Bit | Type::Natural | Type::Positive | Type::BitVec { width: _ } => unreachable!(),
                     Type::Record(rec) => Type::Record(rec.append_name_nested("up")).try_into()?,
                     Type::Union(rec) => Type::Union(rec.append_name_nested("up")).try_into()?,
                     Type::Array(arr) => Type::Array(arr.append_name_nested("up")).try_into()?,
@@ -355,6 +402,8 @@ impl TryFrom<Type> for ObjectType {
     fn try_from(typ: Type) -> Result<Self> {
         match typ {
             Type::Bit => Ok(ObjectType::Bit),
+            Type::Natural => Ok(ObjectType::Natural),
+            Type::Positive => Ok(ObjectType::Positive),
             Type::BitVec { width } => {
                 Ok(ObjectType::bit_vector((width - 1).try_into().unwrap(), 0)?)
             }
@@ -379,7 +428,7 @@ impl TryFrom<Type> for ObjectType {
     type Error = Error;
 }
 
-/// An record object
+/// A record object
 #[derive(Debug, Clone)]
 pub struct RecordObject {
     type_name: String,

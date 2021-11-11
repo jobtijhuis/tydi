@@ -6,7 +6,7 @@ use indexmap::map::IndexMap;
 use array_assignment::ArrayAssignment;
 
 use crate::physical::Width;
-use crate::{Document, Error, Result};
+use crate::{Document, Error, Result, NonNegative};
 
 use super::declaration::{ObjectDeclaration};
 use super::object::ObjectType;
@@ -186,6 +186,8 @@ impl AssignmentKind {
         let object = object.clone().into();
         match object.typ()? {
             ObjectType::Bit => Ok(object.into()),
+            ObjectType::Natural => Ok(object.into()),
+            ObjectType::Positive => Ok(object.into()),
             ObjectType::Record(rec) => {
                 let mut fields = IndexMap::new();
                 for (field, typ) in rec.fields() {
@@ -282,6 +284,7 @@ impl AssignmentKind {
             AssignmentKind::Direct(direct) => match direct {
                 DirectAssignment::Value(value) => match value {
                     ValueAssignment::Bit(bit) => Ok(format!("'{}'", bit)),
+                    ValueAssignment::Integer(integer) => Ok(integer.to_string()),
                     ValueAssignment::BitVec(bitvec) => Ok(bitvec.declare_for(object_identifier)),
                 },
                 DirectAssignment::FullRecord(record) => {
@@ -484,6 +487,8 @@ pub enum DirectAssignment {
 pub enum ValueAssignment {
     /// Assigning a value to a single bit
     Bit(StdLogicValue),
+    /// Assigning an unsigned integer value to a Natural or Positive
+    Integer(NonNegative),
     /// Assigning a value to a (part of) a bit vector
     BitVec(BitVecValue),
 }

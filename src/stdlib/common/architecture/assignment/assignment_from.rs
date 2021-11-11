@@ -1,5 +1,7 @@
 use crate::stdlib::common::architecture::declaration::ObjectDeclaration;
 
+use crate::{Positive, Natural};
+
 use super::{
     array_assignment::ArrayAssignment, bitvec::BitVecValue, Assignment, AssignmentKind,
     DirectAssignment, ObjectAssignment, StdLogicValue, ValueAssignment,
@@ -72,6 +74,18 @@ impl From<ArrayAssignment> for DirectAssignment {
 impl From<StdLogicValue> for ValueAssignment {
     fn from(assignment: StdLogicValue) -> Self {
         ValueAssignment::Bit(assignment.into())
+    }
+}
+
+impl From<Natural> for ValueAssignment {
+    fn from(assignment: Natural) -> Self {
+        ValueAssignment::Integer(assignment.into())
+    }
+}
+
+impl From<Positive> for ValueAssignment {
+    fn from(assignment: Positive) -> Self {
+        ValueAssignment::Integer(assignment.into())
     }
 }
 

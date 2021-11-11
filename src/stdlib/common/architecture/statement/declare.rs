@@ -6,14 +6,40 @@ impl ArchitectureDeclare for PortMapping {
     fn declare(&self, pre: &str, post: &str) -> Result<String> {
         let mut result = pre.to_string();
         result.push_str(&format!(
-            "{}: {} port map(\n",
+            "{}: {}\n",
             self.label(),
             self.component_name()
+        ));
+        // add generic map only if there are generics (this check is not needed for ports because there are always ports)
+        if !self.generics().is_empty() {
+            let mut generic_maps = vec![];
+            for (generic, _) in self.generics() {
+                if let Some(generic_assign) = self.generic_mappings().get(generic) {
+                    // TODO: fix indent to be 1 unit compared to port map
+                    generic_maps.push(generic_assign.declare(&format!("{}      ", pre), "")?);
+                } else {
+                    return Err(Error::BackEndError(format!(
+                        "Error while declaring port mapping, generic {} is not assigned",
+                        generic
+                    )));
+                }
+            }
+            //TODO: implement mapping of generics
+            result.push_str(&format!(
+                "{}   generic map(\n",
+                pre
+            ));
+            result.push_str(&generic_maps.join(",\n"));
+            result.push_str(&format!("\n{}   )\n", pre));
+        }
+        result.push_str(&format!(
+            "{}   port map(\n",
+            pre
         ));
         let mut port_maps = vec![];
         for (port, _) in self.ports() {
             if let Some(port_assign) = self.mappings().get(port) {
-                port_maps.push(port_assign.declare(&format!("{}  ", pre), "")?);
+                port_maps.push(port_assign.declare(&format!("{}      ", pre), "")?);
             } else {
                 return Err(Error::BackEndError(format!(
                     "Error while declaring port mapping, port {} is not assigned",
@@ -22,7 +48,8 @@ impl ArchitectureDeclare for PortMapping {
             }
         }
         result.push_str(&port_maps.join(",\n"));
-        result.push_str(&format!("\n{}){}", pre, post));
+        result.push_str(&format!("\n{}   )", pre));
+        result.push_str(post);
         Ok(result)
     }
 }
@@ -65,14 +92,15 @@ mod tests {
             .map_port("b_dn", &b_dn_rec)?
             .map_port("b_up", &b_up_rec)?;
         assert_eq!(
-            r#"  some_label: test_comp port map(
-    a_dn => a_dn_rec,
-    a_up => a_up_rec,
-    b_dn => b_dn_rec,
-    b_up => b_up_rec
-  );
+            r#"   some_label: test_comp
+      port map(
+         a_dn => a_dn_rec,
+         a_up => a_up_rec,
+         b_dn => b_dn_rec,
+         b_up => b_up_rec
+      );
 "#,
-            mapped.declare("  ", ";\n")?
+            mapped.declare("   ", ";\n")?
         );
         Ok(())
     }
