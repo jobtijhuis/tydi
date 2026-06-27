@@ -236,6 +236,37 @@ impl ObjectType {
         }
         match assignment.kind() {
             AssignmentKind::Object(object) => to_object.can_assign_type(&object.typ()?),
+            AssignmentKind::Concatenation(objects) => match &to_object {
+                ObjectType::Array(to_array) if to_array.is_bitvector() => {
+                    let mut total_width = 0;
+                    for object in objects {
+                        total_width += match object.typ()? {
+                            ObjectType::Bit => 1,
+                            ObjectType::Array(array) if array.is_bitvector() => array.width(),
+                            from => {
+                                return Err(Error::InvalidArgument(format!(
+                                    "Cannot concatenate {} into a bit vector",
+                                    from
+                                )))
+                            }
+                        };
+                    }
+                    if total_width == to_array.width() {
+                        Ok(())
+                    } else {
+                        Err(Error::InvalidArgument(format!(
+                            "Concatenation has width {}, but target {} has width {}",
+                            total_width,
+                            to_object,
+                            to_array.width()
+                        )))
+                    }
+                }
+                _ => Err(Error::InvalidTarget(format!(
+                    "Cannot assign a concatenation to {}",
+                    to_object
+                ))),
+            },
             AssignmentKind::Direct(direct) => match direct {
                 DirectAssignment::Value(value) => match value {
                     ValueAssignment::Bit(_) => match to_object {

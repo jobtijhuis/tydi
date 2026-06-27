@@ -14,6 +14,7 @@ impl ListUsings for AssignmentKind {
         let mut usings = Usings::new_empty();
         match self {
             AssignmentKind::Object(_) => (),
+            AssignmentKind::Concatenation(_) => (),
             AssignmentKind::Direct(direct) => match direct {
                 DirectAssignment::Value(value) => match value {
                     ValueAssignment::Bit(_) => (),

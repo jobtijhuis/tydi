@@ -85,6 +85,9 @@ impl AssignDeclaration {
             AssignmentKind::Direct(_) => Err(Error::InvalidTarget(
                 "Cannot reverse a direct assignment.".to_string(),
             )),
+            AssignmentKind::Concatenation(_) => Err(Error::InvalidTarget(
+                "Cannot reverse a concatenation assignment.".to_string(),
+            )),
         }
     }
 }
@@ -169,6 +172,9 @@ pub enum AssignmentKind {
     Object(ObjectAssignment),
     /// An object is assigned a value, or all fields are assigned/driven at once
     Direct(DirectAssignment),
+    /// An object is assigned from the concatenation (VHDL `&`) of multiple
+    /// objects, listed most-significant first
+    Concatenation(Vec<ObjectAssignment>),
 }
 
 impl AssignmentKind {
@@ -281,6 +287,11 @@ impl AssignmentKind {
         let object_identifier: &str = &object_identifier.into();
         match self {
             AssignmentKind::Object(object) => Ok(object.to_string()),
+            AssignmentKind::Concatenation(objects) => Ok(objects
+                .iter()
+                .map(|object| object.to_string())
+                .collect::<Vec<String>>()
+                .join(" & ")),
             AssignmentKind::Direct(direct) => match direct {
                 DirectAssignment::Value(value) => match value {
                     ValueAssignment::Bit(bit) => Ok(format!("'{}'", bit)),

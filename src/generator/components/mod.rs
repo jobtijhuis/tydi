@@ -19,6 +19,8 @@ mod components {
         declaration::ObjectMode,
         object::ObjectType,
         assignment::Assign,
+        assignment::FieldSelection,
+        assignment::ObjectAssignment,
     };
 
     pub fn alphabet_sequence(num: u32) -> String {
@@ -97,6 +99,21 @@ mod components {
         entity_ports.extend(gen_ports(&logical_type, crate::design::Mode::In));
         entity_ports.extend(gen_ports(&logical_type, crate::design::Mode::Out));
 
+        // DATA_WIDTH spans all input ports except the valid/ready handshake signals
+        let data_width: Natural = entity_ports
+            .iter()
+            .filter(|port| {
+                port.identifier().starts_with("in_")
+                    && port.identifier() != "in_valid"
+                    && port.identifier() != "in_ready"
+            })
+            .map(|port| match port.typ() {
+                Type::BitVec { width } => width,
+                Type::Bit => 1,
+                _ => 0,
+            })
+            .sum();
+
         static SLICE_COUNTER: AtomicU32 = AtomicU32::new(0);
         let slice_count = SLICE_COUNTER.fetch_add(1, Ordering::Relaxed);
 
@@ -108,11 +125,10 @@ mod components {
             None
         );
 
-        let data_port_width = slice_entity.ports().iter().find(|x| x.identifier() == "in_data").unwrap().typ();
-
         package.components.push(slice_entity);
 
-        let slice = slice_comp(data_port_width);
+        // the slice's data ports carry the full concatenated payload of width DATA_WIDTH
+        let slice = slice_comp(Type::bitvec(data_width));
 
         let mut slice_portmap = PortMapping::from_component(&slice, "canonical")?;
 
@@ -125,19 +141,6 @@ mod components {
         let mut slice_assignments = vec![];
 
         let ent_ports = architecture.entity_ports().unwrap();
-
-        // DATA_WIDTH spans all input ports except the valid/ready handshake signals
-        let data_width: Natural = ent_ports
-            .iter()
-            .filter(|(name, _)| {
-                name.starts_with("in_") && name.as_str() != "in_valid" && name.as_str() != "in_ready"
-            })
-            .map(|(_, port)| match port.typ() {
-                ObjectType::Array(array) => array.width(),
-                ObjectType::Bit => 1,
-                _ => 0,
-            })
-            .sum();
 
         slice_portmap.map_generic("DATA_WIDTH", &data_width)?;
 
@@ -155,13 +158,51 @@ mod components {
             ).ok_or(
                 Error::BackEndError(format!("Entity does not have a {} signal", port_name))
             )?;
-            slice_assignments.push(
-                if *entity_port.mode() == ObjectMode::Out {
-                    entity_port.assign(&signal)?
-                } else {
-                    signal.assign(entity_port)?
+            if port_name.as_str() == "in_data" {
+                // drive the slice's input data from the concatenation of all
+                // input ports, excluding the valid/ready handshake signals
+                let in_ports: Vec<ObjectDeclaration> = ent_ports
+                    .iter()
+                    .filter(|(name, _)| {
+                        name.starts_with("in_")
+                            && name.as_str() != "in_valid"
+                            && name.as_str() != "in_ready"
+                    })
+                    .map(|(_, port)| port.clone())
+                    .collect();
+                slice_assignments.push(signal.assign_concat(&in_ports)?);
+            } else if port_name.as_str() == "out_data" {
+                // split the slice's output data back out into the individual output
+                // ports, in the same order they were concatenated on the input side
+                let mut high = data_width as i32 - 1;
+                for (_, out_port) in ent_ports.iter().filter(|(name, _)| {
+                    name.starts_with("out_")
+                        && name.as_str() != "out_valid"
+                        && name.as_str() != "out_ready"
+                }) {
+                    let selection = match out_port.typ() {
+                        ObjectType::Bit => {
+                            let sel = FieldSelection::index(high);
+                            high -= 1;
+                            sel
+                        }
+                        ObjectType::Array(array) => {
+                            let low = high - array.width() as i32 + 1;
+                            let sel = FieldSelection::downto(high, low)?;
+                            high = low - 1;
+                            sel
+                        }
+                        _ => continue,
+                    };
+                    let sliced =
+                        ObjectAssignment::from(signal.clone()).assign_from(&vec![selection])?;
+                    slice_assignments.push(out_port.assign(&sliced)?);
                 }
-            );
+            } else if *entity_port.mode() == ObjectMode::Out {
+                slice_assignments.push(entity_port.assign(&signal)?);
+            } else {
+                slice_assignments.push(signal.assign(entity_port)?);
+            }
 
             slice_portmap.map_port(port_name, &signal)?;
             architecture.add_declaration(signal)?;
