@@ -3,7 +3,7 @@
 mod components {
     use std::sync::atomic::{AtomicU32, Ordering};
     use crate::{
-        Name, cat, Result, Error, Identify
+        Name, cat, Result, Error, Identify, Natural
     };
     use crate::logical::{
         LogicalType
@@ -17,6 +17,7 @@ mod components {
         statement::PortMapping,
         declaration::ObjectDeclaration,
         declaration::ObjectMode,
+        object::ObjectType,
         assignment::Assign,
     };
 
@@ -34,8 +35,7 @@ mod components {
         Component::new(
             "StreamSlice",
             vec![
-                // TODO: Implement natural
-                Parameter{name: String::from("DATA_WIDTH"), typ: Type::Bit}
+                Parameter{name: String::from("DATA_WIDTH"), typ: Type::Natural}
             ],
             vec![
                 Port::new_documented("clk", Mode::In, Type::Bit, None),
@@ -126,6 +126,21 @@ mod components {
 
         let ent_ports = architecture.entity_ports().unwrap();
 
+        // DATA_WIDTH spans all input ports except the valid/ready handshake signals
+        let data_width: Natural = ent_ports
+            .iter()
+            .filter(|(name, _)| {
+                name.starts_with("in_") && name.as_str() != "in_valid" && name.as_str() != "in_ready"
+            })
+            .map(|(_, port)| match port.typ() {
+                ObjectType::Array(array) => array.width(),
+                ObjectType::Bit => 1,
+                _ => 0,
+            })
+            .sum();
+
+        slice_portmap.map_generic("DATA_WIDTH", &data_width)?;
+
         // create signals and assignments for StreamSlice component
         for (port_name, object) in slice_portmap.clone().ports() {
             let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
@@ -167,7 +182,7 @@ mod components {
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;
-    
+
     use crate::generator::{
         common::convert::Packify,
         common::convert::CANON_SUFFIX,
@@ -181,7 +196,7 @@ mod test {
         implementation::composer::GenericComponent
     };
     use crate::{
-        Name, cat, Result, parser
+        Name, Natural, Result, cat, parser
     };
 
     use crate::stdlib::common::{
@@ -192,6 +207,34 @@ mod test {
     };
 
     use super::*;
+
+    #[test]
+    fn slice_complex_generation() -> Result<()> {
+        let (_, streamlet) = parser::nom::streamlet(
+            "Streamlet streamlet (in_pass : in Stream<Union<a: Bits<32>, b: Bits<8>>, d=0, t=8, c=8>,
+                in_pass2 : in Stream<Group<op1: Bits<64>, op2: Bits<54>>, d=0, t=0.1, c=8>,
+                out_pass : out Stream<Union<a: Bits<32>, b: Bits<8>>, d=0, t=8, c=8>)",
+        )
+        .unwrap();
+
+        let interface = streamlet.interfaces().next().unwrap().clone();
+        let logical_type = interface.typ();
+
+        let library = Library::try_new(
+            Name::try_from("test_library")?,
+            vec![],
+            vec![streamlet]
+        )?;
+
+        let mut package = library.canonical();
+
+        let architecture = components::logical_slice(logical_type, &mut package)?;
+
+        println!("architecture: \n{}", architecture.declare()?);
+
+        // let arch = generate_fancy_wrapper(&pak, &StreamletKey::try_from("passthrough_stub")?)?;
+        Ok(())
+    }
 
     #[test]
     fn slice_simple_generation() -> Result<()> {
@@ -212,7 +255,7 @@ mod test {
 
         let architecture = components::logical_slice(logical_type, &mut package)?;
 
-        println!("architecture: \n {}", architecture.declare()?);
+        println!("architecture: \n{}", architecture.declare()?);
 
         // Convert Signal to Type from MatthijsR
 
@@ -236,9 +279,9 @@ mod test {
     );
     end slice_a;
 
-    architecture Behavioral of slice_a is
+    architecture behavioral of slice_a is
     begin
-    end Behavioral;
+    end behavioral;
     ";
 
         Ok(())
@@ -297,15 +340,14 @@ mod test {
         )?;
         // let mut portmap =
         // PortMapping::from_component(
-        //     &package.get_component(cat!(streamlet_key, CANON_SUFFIX.unwrap()))?, 
+        //     &package.get_component(cat!(streamlet_key, CANON_SUFFIX.unwrap()))?,
         //     "canonical"
         // )?;
 
         let streamslice_comp = Component::new(
             "StreamSlice",
             vec![
-                // TODO: Implement natural
-                Parameter{name: String::from("DATA_WIDTH"), typ: Type::Bit}
+                Parameter{name: String::from("DATA_WIDTH"), typ: Type::Natural}
             ],
             vec![
                 Port::new_documented("clk", Mode::In, Type::Bit, None),
@@ -340,7 +382,10 @@ mod test {
         //     architecture.add_statement(assign)?;
         // }
 
+        slice_portmap.map_generic("DATA_WIDTH", &(32 as Natural))?;
+
         architecture.add_statement(slice_portmap)?;
+
 
         // // create signals and assignments for component from entity
         // for (port_name, object) in portmap.clone().ports() {

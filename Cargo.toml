@@ -30,3 +30,8 @@ nom = { version = "7", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+
+[lints.rust]
+mismatched_lifetime_syntaxes = "allow"
+unused_parens = "allow"
+noop_method_call = "allow"

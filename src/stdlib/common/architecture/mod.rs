@@ -51,7 +51,7 @@ impl<'a> Architecture<'a> {
     pub fn new_default(package: &Package, component_id: impl Into<String>) -> Result<Architecture> {
         Architecture::new(
             Name::try_new("work")?,
-            Name::try_new("Behavioral")?,
+            Name::try_new("behavioral")?,
             package,
             component_id,
         )
@@ -193,9 +193,9 @@ entity test is
   );
 end test;
 
-architecture Behavioral of test is
+architecture behavioral of test is
 begin
-end Behavioral;
+end behavioral;
 "#,
             architecture.declare().unwrap()
         );

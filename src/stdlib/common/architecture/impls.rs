@@ -65,11 +65,11 @@ impl<'a> Declare for Architecture<'a> {
             .as_str(),
         );
         for declaration in self.declarations() {
-            result.push_str(&declaration.declare("   ", ";\n")?);
+            result.push_str(&declaration.declare("  ", ";\n")?);
         }
         result.push_str("begin\n");
         for statement in self.statements() {
-            result.push_str(&statement.declare("   ", ";\n")?);
+            result.push_str(&statement.declare("  ", ";\n")?);
         }
         result.push_str(format!("end {};\n", self.identifier()).as_str());
         Ok(result)

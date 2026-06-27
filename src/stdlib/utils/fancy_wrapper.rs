@@ -134,7 +134,7 @@ entity passthrough_stub_com is
   );
 end passthrough_stub_com;
 
-architecture Behavioral of passthrough_stub_com is
+architecture behavioral of passthrough_stub_com is
    signal clk_wire : std_logic;
    signal rst_wire : std_logic;
    signal in_pass_dn_wire : passthrough_stub_in_pass_dn_type;
@@ -219,7 +219,7 @@ begin
      out_pass_dn => out_pass_dn_wire,
      out_pass_up => out_pass_up_wire
    );
-end Behavioral;
+end behavioral;
 "#,
             arch.declare()?
         );
