@@ -13,3 +13,4 @@ tarpaulin-report.html
 # Output
 /output
 *.cf
+vunit_out

@@ -56,7 +56,7 @@ mod components {
     }
 
 
-    pub fn logical_slice<'a>(logical_type : LogicalType, package: &'a mut Package) -> Result<Architecture<'a>> {
+    pub fn logical_slice<'a>(logical_type : LogicalType, package: &'a mut Package, name: Option<&str>) -> Result<Architecture<'a>> {
 
         fn gen_ports (l_type: &LogicalType, mode: crate::design::Mode) -> Vec<Port> {
             let mut ports = vec![];
@@ -117,7 +117,7 @@ mod components {
         static SLICE_COUNTER: AtomicU32 = AtomicU32::new(0);
         let slice_count = SLICE_COUNTER.fetch_add(1, Ordering::Relaxed);
 
-        let entity_name = cat!["slice", alphabet_sequence(slice_count)];
+        let entity_name = cat![name.unwrap_or("slice"), alphabet_sequence(slice_count)];
         let slice_entity = Component::new(
             entity_name.clone(),
             vec![],
@@ -237,7 +237,7 @@ mod test {
         implementation::composer::GenericComponent
     };
     use crate::{
-        Name, Natural, Result, cat, parser
+        Name, Natural, Result, cat, parser, Identify
     };
 
     use crate::stdlib::common::{
@@ -261,19 +261,32 @@ mod test {
         let interface = streamlet.interfaces().next().unwrap().clone();
         let logical_type = interface.typ();
 
+        let name = "slice_complex";
+
         let library = Library::try_new(
-            Name::try_from("test_library")?,
+            Name::try_from(format!("{}_pkg", name))?,
             vec![],
             vec![streamlet]
         )?;
 
         let mut package = library.canonical();
 
-        let architecture = components::logical_slice(logical_type, &mut package)?;
 
-        println!("architecture: \n{}", architecture.declare()?);
+        let architecture = components::logical_slice(logical_type, &mut package, Some(name))?;
 
-        // let arch = generate_fancy_wrapper(&pak, &StreamletKey::try_from("passthrough_stub")?)?;
+        let architecture_vhdl = architecture.declare()?;
+        println!("architecture: \n{}", architecture_vhdl);
+
+        // owned copy so the architecture's borrow of `package` ends before we declare it
+        let entity_name = architecture.entity().identifier().to_string();
+
+        let package_vhdl = package.declare()?;
+        println!("package: \n{}", package_vhdl);
+
+        let out_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vunit");
+        std::fs::write(out_dir.join(format!("{}_pkg.vhd", name)), &package_vhdl)?;
+        std::fs::write(out_dir.join(format!("{}.vhd", entity_name)), &architecture_vhdl)?;
+
         Ok(())
     }
 
@@ -294,9 +307,11 @@ mod test {
 
         let mut package = library.canonical();
 
-        let architecture = components::logical_slice(logical_type, &mut package)?;
+        let architecture = components::logical_slice(logical_type, &mut package, None)?;
 
         println!("architecture: \n{}", architecture.declare()?);
+
+        println!("package: \n{}", package.declare()?);
 
         // Convert Signal to Type from MatthijsR
 
@@ -379,11 +394,6 @@ mod test {
             &package,
             cat!(streamlet_key, CANON_SUFFIX.unwrap())
         )?;
-        // let mut portmap =
-        // PortMapping::from_component(
-        //     &package.get_component(cat!(streamlet_key, CANON_SUFFIX.unwrap()))?,
-        //     "canonical"
-        // )?;
 
         let streamslice_comp = Component::new(
             "StreamSlice",
@@ -409,8 +419,6 @@ mod test {
             "streamslice"
         )?;
 
-        //let mut conc_assigns = vec![];
-
         // create signals and assignments for StreamSlice component
         for (port_name, object) in slice_portmap.clone().ports() {
             let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
@@ -419,39 +427,15 @@ mod test {
             architecture.add_declaration(signal)?;
         }
 
-        // for assign in conc_assigns {
-        //     architecture.add_statement(assign)?;
-        // }
-
         slice_portmap.map_generic("DATA_WIDTH", &(32 as Natural))?;
 
         architecture.add_statement(slice_portmap)?;
-
-
-        // // create signals and assignments for component from entity
-        // for (port_name, object) in portmap.clone().ports() {
-        //     let signal = ObjectDeclaration::signal(cat!(port_name, "wire"), object.typ().clone(), None);
-        //     let _assign_decl = signal.assign(architecture.entity_ports()?.get(port_name).ok_or(
-        //         Error::BackEndError(format!("Entity does not have a {} signal", port_name)),
-        //     )?)?;
-        //     portmap.map_port(port_name, &signal)?;
-        //     architecture.add_declaration(signal)?;
-        // }
-
-        // architecture.add_statement(portmap)?;
 
         println!("{}", architecture.declare()?);
 
         Ok(())
 
     }
-
-    // Things to add for using external component:
-    // use work.Stream_pkg.all;
-    // PortMapping of Component
-    // add generics to Portmapping
-    // use ObjectDeclaration::constant for defining generics
-    // Find a way to do sub assign of bitvector
 
     #[test]
     fn test_alph_seq() {

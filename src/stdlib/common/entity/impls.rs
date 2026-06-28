@@ -13,7 +13,7 @@ impl Declare for Entity {
         }
         result.push_str(format!("entity {} is\n", self.identifier()).as_str());
         result.push_str(self.ports().declare()?.as_str());
-        result.push_str(format!("end {};\n", self.identifier()).as_str());
+        result.push_str(format!("end entity {};\n", self.identifier()).as_str());
         Ok(result)
     }
 }

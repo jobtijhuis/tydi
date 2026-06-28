@@ -71,7 +71,7 @@ impl<'a> Declare for Architecture<'a> {
         for statement in self.statements() {
             result.push_str(&statement.declare("  ", ";\n")?);
         }
-        result.push_str(format!("end {};\n", self.identifier()).as_str());
+        result.push_str(format!("end architecture {};\n", self.identifier()).as_str());
         Ok(result)
     }
 }

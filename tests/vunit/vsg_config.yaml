@@ -1,0 +1,7 @@
+{
+  "rule": {
+    "global": {
+      "case": "upper_or_lower"
+    }
+  }
+}

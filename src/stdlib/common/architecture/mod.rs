@@ -47,7 +47,7 @@ pub trait ArchitectureDeclare {
 }
 
 impl<'a> Architecture<'a> {
-    /// Create the architecture based on a component contained within a package, assuming the library (project) is "work" and the architecture's identifier is "Behavioral"
+    /// Create the architecture based on a component contained within a package, assuming the library (project) is "work" and the architecture's identifier is "behavioral"
     pub fn new_default(package: &Package, component_id: impl Into<String>) -> Result<Architecture> {
         Architecture::new(
             Name::try_new("work")?,
@@ -135,6 +135,11 @@ impl<'a> Architecture<'a> {
 
     pub fn declarations(&self) -> &Vec<ArchitectureDeclaration> {
         &self.declaration
+    }
+
+    /// Return the entity this architecture implements.
+    pub fn entity(&self) -> &Entity {
+        &self.entity
     }
 
     pub fn entity_ports(&self) -> Result<IndexMap<String, ObjectDeclaration>> {

@@ -341,7 +341,7 @@ impl Declare for Package {
             }
             result.push_str(format!("{}\n\n", c.declare()?).as_str());
         }
-        result.push_str(format!("end {};", self.identifier).as_str());
+        result.push_str(format!("end package {};", self.identifier).as_str());
 
         Ok(result)
     }
